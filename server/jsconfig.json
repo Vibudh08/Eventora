@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "noImplicitAny": false,
+    "strict": false,
+    "noEmit": true
+  },
+  "exclude": ["node_modules"]
+}
