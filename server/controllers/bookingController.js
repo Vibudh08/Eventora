@@ -1,5 +1,6 @@
 import Booking from "../models/Booking.js";
 import Event from "../models/Event.js";
+import User from "../models/User.js";
 import { sendEventStatusEmail } from "../utils/email.js";
 
 export const bookEvent = async (req, res) => {
@@ -103,7 +104,7 @@ export const cancelBooking = async (req, res) => {
 
     const updatedBooking = await Booking.findByIdAndUpdate(
       id,
-      {  
+      {
         status: "cancelled",
       },
       { new: true },
@@ -126,5 +127,95 @@ export const cancelBooking = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Failed to cancel booking", error: error.message });
+  }
+};
+
+export const getAdminEventBookingsSummary = async (req, res) => {
+  try {
+    const { type = "summary" } = req.query;
+    const events = await Event.find().lean();
+    const eventIds = events.map((event) => event._id);
+
+    const bookings = await Booking.find({ eventId: { $in: eventIds } }).lean();
+    const users = await User.find().select("-password").lean();
+
+    const usersById = users.reduce((acc, userData) => {
+      acc[userData._id.toString()] = userData;
+      return acc;
+    }, {});
+
+    const bookingsByEventId = bookings.reduce((acc, booking) => {
+      const eventId = booking.eventId.toString();
+      if (!acc[eventId]) {
+        acc[eventId] = [];
+      }
+
+      acc[eventId].push({
+        ...booking,
+        userId: usersById[booking.userId.toString()] || booking.userId,
+      });
+      return acc;
+    }, {});
+
+    const eventsWithBookings = events.map((event) => {
+      const eventBookings = bookingsByEventId[event._id.toString()] || [];
+      return {
+        ...event,
+        bookingCount: eventBookings.length,
+        bookings: eventBookings,
+      };
+    });
+
+    if (type === "users") {
+      const usersWithBookings = users.map((userData) => {
+        const userBookings = bookings.filter(
+          (booking) => booking.userId.toString() === userData._id.toString(),
+        );
+
+        return {
+          ...userData,
+          bookingCount: userBookings.length,
+          bookings: userBookings.map((booking) => ({
+            ...booking,
+            eventId: events.find(
+              (event) => event._id.toString() === booking.eventId.toString(),
+            ),
+          })),
+        };
+      });
+
+      return res.status(200).json({ users: usersWithBookings });
+    }
+
+    if (type === "all") {
+      const usersWithBookings = users.map((userData) => {
+        const userBookings = bookings.filter(
+          (booking) => booking.userId.toString() === userData._id.toString(),
+        );
+
+        return {
+          ...userData,
+          bookingCount: userBookings.length,
+          bookings: userBookings.map((booking) => ({
+            ...booking,
+            eventId: events.find(
+              (event) => event._id.toString() === booking.eventId.toString(),
+            ),
+          })),
+        };
+      });
+
+      return res.status(200).json({
+        events: eventsWithBookings,
+        users: usersWithBookings,
+      });
+    }
+
+    return res.status(200).json({ events: eventsWithBookings });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch summary",
+      error: error.message,
+    });
   }
 };
