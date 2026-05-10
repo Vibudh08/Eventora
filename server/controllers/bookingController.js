@@ -5,23 +5,57 @@ import { sendEventStatusEmail } from "../utils/email.js";
 
 export const bookEvent = async (req, res) => {
   const { eventId } = req.body;
+
   try {
     const event = await Event.findById(eventId);
+
     if (!event) {
-      return res.status(404).json({ message: "Event not found" });
+      return res.status(404).json({
+        message: "Event not found",
+      });
     }
+
     if (event.availableSeats <= 0) {
-      return res.status(400).json({ message: "No seats available" });
+      return res.status(400).json({
+        message: "No seats available",
+      });
     }
+
     const existingBooking = await Booking.findOne({
       userId: req.user._id,
       eventId,
     });
+
     if (existingBooking) {
-      return res
-        .status(400)
-        .json({ message: "You have already booked this event" });
+      if (existingBooking.status === "booked") {
+        return res.status(400).json({
+          message: "You have already booked this event",
+        });
+      }
+
+      if (existingBooking.status === "pending") {
+        return res.status(200).json({
+          message: "Existing pending booking found. Proceeding to payment gateway...",
+          booking: existingBooking,
+        });
+      }
+
+      const reactivatedBooking = await Booking.findByIdAndUpdate(
+        existingBooking._id,
+        {
+          amount: event.ticketPrice,
+          paymentStatus: "unpaid",
+          status: "pending",
+        },
+        { new: true },
+      );
+
+      return res.status(200).json({
+        message: "Booking restarted. Proceeding to payment gateway...",
+        booking: reactivatedBooking,
+      });
     }
+
     const booking = await Booking.create({
       userId: req.user._id,
       eventId,
@@ -29,52 +63,77 @@ export const bookEvent = async (req, res) => {
       paymentStatus: "unpaid",
       status: "pending",
     });
-    return res
-      .status(201)
-      .json({ message: "Booking created. Proceed to payment", booking });
+
+    return res.status(201).json({
+      message: "Booking created. Proceeding to payment gateway...",
+      booking,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Booking failed", error: error.message });
+    return res.status(500).json({
+      message: "Booking failed",
+      error: error.message,
+    });
   }
 };
 
 export const confirmBooking = async (req, res) => {
   const { id } = req.params;
+
+  const { razorpayOrderId, razorpayPaymentId } = req.body || {};
+
   try {
     const booking = await Booking.findById(id).populate("eventId");
+
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
+      return res.status(404).json({
+        message: "Booking not found",
+      });
     }
-    if (booking.status == "booked") {
-      return res.status(400).json({ message: "Booking already confirmed" });
+
+    if (booking.status === "booked") {
+      return res.status(400).json({
+        message: "Booking already confirmed",
+      });
     }
+
     if (booking.eventId.availableSeats <= 0) {
-      return res.status(400).json({ message: "No seats available" });
+      return res.status(400).json({
+        message: "No seats available",
+      });
     }
+
     const updatedBooking = await Booking.findByIdAndUpdate(
       id,
       {
         status: "booked",
         paymentStatus: "paid",
+        razorpayOrderId,
+        razorpayPaymentId,
       },
       { new: true },
     );
+
     await Event.findByIdAndUpdate(booking.eventId._id, {
       $inc: { availableSeats: -1 },
     });
-    await sendEventStatusEmail(
+
+    sendEventStatusEmail(
       req.user.email,
       booking.eventId.name,
       "booking_success",
-    );
-    return res
-      .status(200)
-      .json({ message: "Booking confirmed successfully", updatedBooking });
+    ).catch((emailError) => {
+      console.error("Booking confirmation email failed:", emailError);
+    });
+
+    return res.status(200).json({
+      message: "Booking confirmed successfully",
+      updatedBooking,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to confirm booking", error: error.message });
+    return res.status(500).json({
+      message: "Failed to confirm booking",
+      error: error.message,
+    });
   }
 };
 
@@ -115,11 +174,14 @@ export const cancelBooking = async (req, res) => {
       });
     }
 
-    await sendEventStatusEmail(
+    sendEventStatusEmail(
       req.user.email,
       booking.eventId.name,
       "booking_cancelled",
-    );
+    ).catch((emailError) => {
+      console.error("Booking cancellation email failed:", emailError);
+    });
+
     return res
       .status(200)
       .json({ message: "Booking cancelled successfully", updatedBooking });

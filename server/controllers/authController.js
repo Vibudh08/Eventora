@@ -14,7 +14,7 @@ export const registerUser = async (req, res) => {
 
     const userExists = await user.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ error: "User already exists." });
+      return res.status(400).json({ error: "User already exists. Please login." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -91,7 +91,7 @@ export const verifyOTP = async (req, res) => {
     });
 
     if (!checkOTP) {
-      return res.status(400).json({ message: "wrong OTP" });
+      return res.status(400).json({ message: "OTP entered is not correct." });
     }
 
     const verifiedUser = await user.findOneAndUpdate(

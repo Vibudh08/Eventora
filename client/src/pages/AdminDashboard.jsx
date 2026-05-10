@@ -7,6 +7,7 @@ const AdminDashboard = () => {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
     const [events, setEvents] = useState([]);
+    const [users, setUsers] = useState([]);
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -38,6 +39,7 @@ const AdminDashboard = () => {
             );
 
             setEvents(data.events || []);
+            setUsers(data.users || []);
             setBookings(userBookings);
         } catch (error) {
             console.error('Error fetching admin data', error);
@@ -79,26 +81,6 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleConfirmBooking = async (id) => {
-        try {
-            await api.put(`/booking/${id}/confirm`);
-            fetchData();
-        } catch (error) {
-            alert(error.response?.data?.message || 'Error confirming booking');
-        }
-    };
-
-    const handleCancelBooking = async (id) => {
-        if (window.confirm('Cancel this user\'s booking request?')) {
-            try {
-                await api.delete(`/booking/${id}`);
-                fetchData();
-            } catch (error) {
-                alert(error.response?.data?.message || 'Error cancelling booking');
-            }
-        }
-    };
-
     if (loading) return <div className="text-center py-20 text-xl font-semibold">Loading admin panel...</div>;
 
     return (
@@ -106,7 +88,7 @@ const AdminDashboard = () => {
             <div className="bg-black text-white rounded-2xl p-6 sm:p-8 mb-8 shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-extrabold mb-2">Admin Dashboard</h1>
-                    <p className="text-gray-300">Manage events and manually confirm bookings.</p>
+                    <p className="text-gray-300">Manage events and view booking activity.</p>
                 </div>
                 <button
                     onClick={() => setShowEventForm(!showEventForm)}
@@ -127,17 +109,17 @@ const AdminDashboard = () => {
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
                     <div>
-                        <p className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">Paid Clients</p>
+                        <p className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">Paid Users</p>
                         <h3 className="text-3xl font-black text-blue-600">{new Set(bookings.filter(b => b.paymentStatus === 'paid' && b.status === 'booked').map(b => b.userId?._id)).size}</h3>
                     </div>
                     <div className="w-12 h-12 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center text-xl font-bold">👤</div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
                     <div>
-                        <p className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">Pending Requests</p>
-                        <h3 className="text-3xl font-black text-yellow-600">{bookings.filter(b => b.status === 'pending').length}</h3>
+                        <p className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">Tickets Sold</p>
+                        <h3 className="text-3xl font-black text-purple-600">{bookings.filter(b => b.status === 'booked').length}</h3>
                     </div>
-                    <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center text-xl font-bold">⏳</div>
+                    <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xl font-bold">T</div>
                 </div>
             </div>
 
@@ -173,17 +155,41 @@ const AdminDashboard = () => {
                         <ul className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
                             {events.length === 0 ? <li className="p-6 text-gray-500 text-center">No events created yet.</li> :
                                 events.map(event => (
-                                    <li key={event._id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
-                                        <div>
-                                            <h4 className="font-bold text-gray-900 mb-1 leading-tight">{event.name}</h4>
-                                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-                                                <span className="flex items-center gap-1 font-medium"><div className="w-2 h-2 rounded-full bg-blue-500"></div> {new Date(event.date).toLocaleDateString()}</span>
-                                                <span className="flex items-center gap-1 font-medium"><div className={`w-2 h-2 rounded-full ${event.availableSeats > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div> {event.availableSeats}/{event.totalSeats} seats</span>
+                                    <li key={event._id} className="p-5 hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 mb-1 leading-tight">{event.name}</h4>
+                                                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                                                    <span className="flex items-center gap-1 font-medium"><div className="w-2 h-2 rounded-full bg-blue-500"></div> {new Date(event.date).toLocaleDateString()}</span>
+                                                    <span className="flex items-center gap-1 font-medium"><div className={`w-2 h-2 rounded-full ${event.availableSeats > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div> {event.availableSeats}/{event.totalSeats} seats</span>
+                                                    <span className="font-bold text-gray-700">{event.bookingCount || 0} bookings</span>
+                                                </div>
                                             </div>
+                                            <button onClick={() => handleDeleteEvent(event._id)} className="w-full sm:w-auto text-red-500 hover:text-white hover:bg-red-500 border border-red-200 px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm shrink-0">
+                                                Delete
+                                            </button>
                                         </div>
-                                        <button onClick={() => handleDeleteEvent(event._id)} className="w-full sm:w-auto text-red-500 hover:text-white hover:bg-red-500 border border-red-200 px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm shrink-0">
-                                            Delete
-                                        </button>
+
+                                        {(event.bookings || []).length > 0 && (
+                                            <div className="mt-4 bg-white rounded-lg border border-gray-100 overflow-hidden">
+                                                <ul className="divide-y divide-gray-100">
+                                                    {event.bookings.map((booking) => (
+                                                        <li key={booking._id} className="p-3 text-sm">
+                                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                <div>
+                                                                    <span className="font-semibold text-gray-900">{booking.userId?.name || 'Unknown User'}</span>
+                                                                    <span className="text-gray-400 ml-2">{booking.userId?.email}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`px-2 py-1 text-[10px] font-black rounded uppercase tracking-wider ${booking.status === 'booked' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{booking.status}</span>
+                                                                    <span className="text-gray-600 font-semibold">{booking.amount === 0 ? 'Free' : `₹${booking.amount}`}</span>
+                                                                </div>
+                                                            </div>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </li>
                                 ))
                             }
@@ -191,21 +197,69 @@ const AdminDashboard = () => {
                     </div>
                 </div>
 
+                {/* Users Section */}
+                <div className="flex flex-col">
+                    <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-3">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">{users.length}</span>
+                        All Users
+                    </h2>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <ul className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                            {users.length === 0 ? <li className="p-6 text-gray-500 text-center">No users found.</li> :
+                                users.map(userData => (
+                                    <li key={userData._id} className="p-5 hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 mb-1 leading-tight">{userData.name}</h4>
+                                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                                                <span>{userData.email}</span>
+                                                <span className="font-bold text-gray-700">{userData.bookingCount || 0} bookings</span>
+                                            </div>
+                                        </div>
+
+                                        {(userData.bookings || []).length > 0 && (
+                                            <div className="mt-4 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
+                                                <ul className="divide-y divide-gray-100">
+                                                    {userData.bookings.map((booking) => (
+                                                        <li key={booking._id} className="p-3 text-sm">
+                                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                <div>
+                                                                    <span className="font-semibold text-gray-900">{booking.eventId?.name || 'Deleted Event'}</span>
+                                                                    <span className="text-gray-400 ml-2">{booking.eventId?.category}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`px-2 py-1 text-[10px] font-black rounded uppercase tracking-wider ${booking.status === 'booked' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{booking.status}</span>
+                                                                    <span className="text-gray-600 font-semibold">{booking.amount === 0 ? 'Free' : `₹${booking.amount}`}</span>
+                                                                </div>
+                                                            </div>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </li>
+                                ))
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-8 mt-8">
                 {/* Bookings Section */}
                 <div className="flex flex-col">
                     <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-3">
                         <span className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100 text-yellow-700 text-sm font-bold">{bookings.length}</span>
-                        Booking Requests
+                        All Bookings
                     </h2>
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <ul className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                        <ul className="divide-y divide-gray-100 max-h-[720px] overflow-y-auto">
                             {bookings.length === 0 ? <li className="p-6 text-gray-500 text-center">No bookings yet.</li> :
                                 bookings.map(booking => (
-                                    <li key={booking._id} className={`p-6 hover:bg-gray-50 transition border-l-4 ${booking.status === 'pending' ? 'border-l-yellow-400' : booking.status === 'booked' ? 'border-l-green-400' : 'border-l-red-400'}`}>
+                                    <li key={booking._id} className={`p-6 hover:bg-gray-50 transition border-l-4 ${booking.status === 'booked' ? 'border-l-green-400' : 'border-l-red-400'}`}>
                                         <div className="flex justify-between items-start mb-3">
                                             <h4 className="font-bold text-gray-900 text-lg leading-tight">{booking.eventId?.name || 'Deleted Event'}</h4>
                                             <div className="flex flex-col gap-1 items-end shrink-0 ml-4">
-                                                <span className={`px-2 py-1 text-[10px] font-black rounded uppercase tracking-wider ${booking.status === 'booked' ? 'bg-green-100 text-green-700' : booking.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{booking.status}</span>
+                                                <span className={`px-2 py-1 text-[10px] font-black rounded uppercase tracking-wider ${booking.status === 'booked' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{booking.status}</span>
                                                 {booking.status !== 'cancelled' && <span className={`px-2 py-1 text-[10px] font-black rounded uppercase tracking-wider ${booking.paymentStatus === 'paid' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-800'}`}>{booking.paymentStatus.replace('_', ' ')}</span>}
                                             </div>
                                         </div>
@@ -231,17 +285,9 @@ const AdminDashboard = () => {
                                             )}
                                         </div>
 
-                                        {/* Action buttons for admin */}
-                                        {booking.status === 'pending' && (
-                                            <div className="flex flex-wrap gap-2 mt-2">
-                                                <button onClick={() => handleConfirmBooking(booking._id)} className="flex-1 min-w-[120px] bg-green-50 text-green-700 hover:bg-green-600 hover:text-white border border-green-200 text-xs font-bold py-2.5 px-3 rounded-lg shadow-sm transition">
-                                                    ✓ Approve as Paid
-                                                </button>
-                                                <button onClick={() => handleCancelBooking(booking._id)} className="w-[80px] bg-red-50 text-red-600 hover:bg-red-500 hover:text-white border border-red-200 text-xs font-bold py-2.5 px-3 rounded-lg transition">
-                                                    ✕ Reject
-                                                </button>
-                                            </div>
-                                        )}
+                                        <p className="text-xs text-gray-400 font-medium">
+                                            Booking actions will be available after payment integration.
+                                        </p>
                                     </li>
                                 ))
                             }

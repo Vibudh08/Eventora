@@ -6,6 +6,8 @@ import dbConnection from "./dbConnect.js";
 import authRoutes from "./routes/auth.js";
 import bookingRoutes from "./routes/booking.js";
 import eventRoutes from "./routes/events.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 dotenv.config();
@@ -18,6 +20,7 @@ dbConnection();
 app.use("/api/auth", authRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/booking", bookingRoutes);
+app.use("/api/payment", paymentRoutes);
 
 app.listen(3000, () => {
   console.log("Server is running on port 3000");

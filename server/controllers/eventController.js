@@ -2,12 +2,16 @@ import Event from "../models/Event.js";
 
 export const getEvents = async (req, res) => {
   try {
+    const search = req.query.search?.trim() || "";
     const filters = {};
+    if (search) {
+      filters.$or = [{ name: { $regex: search, $options: "i" } }];
+    }
     if (req.query.category) {
-      filters.category = req.query.category;
+      filters.category = { $regex: req.query.category.trim(), $options: "i" };
     }
     if (req.query.location) {
-      filters.location = req.query.location;
+      filters.location = { $regex: req.query.location.trim(), $options: "i" };
     }
     if (req.query.minPrice || req.query.maxPrice) {
       filters.ticketPrice = {};
